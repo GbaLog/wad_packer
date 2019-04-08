@@ -4,6 +4,9 @@ project(wad_converter)
 
 set(SRC_LIST
   main.cpp
+
+  MemReader.cpp
+  MemReader.h
 )
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})

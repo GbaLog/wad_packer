@@ -4,11 +4,12 @@
 #include <cstring>
 #include <winsock2.h>
 #include "Tracer.h"
+#include "MemReader.h"
 
 bool isWadFormat(uint32_t magic)
 {
-  const uint32_t wadFormat = ('W' << 24) | ('A' << 16) | ('D' << 8) | 0x00;
-  return (magic & 0xFFFFFF00) == wadFormat;
+  const uint32_t wadFormat = (0x00 << 24) | ('D' << 16) | ('A' << 8) | 'W';
+  return (magic & 0x00FFFFFF) == wadFormat;
 }
 
 struct WADHeader
@@ -53,12 +54,56 @@ public:
 
     const uint8_t * dataRgb = data + _params._offsetOfMipmap3 + (_params._width / 8 * _params._height / 8) + 2;
     _rgb[0].resize(256);
-    for (auto & it : _rgb[0])
+    _rgb[1].resize(256);
+    _rgb[2].resize(256);
+    for (int i = 0; i < 256; ++i)
     {
       uint8_t colorRed = *dataRgb++;
-      uint8_t colorBlue = *dataRgb++;
       uint8_t colorGreen = *dataRgb++;
-      it = (0xFF << 24) | (colorRed << 16) | (colorBlue << 8) | colorGreen;
+      uint8_t colorBlue = *dataRgb++;
+      _rgb[0][i] = colorRed;
+      _rgb[1][i] = colorGreen;
+      _rgb[2][i] = colorBlue;
+      //it = (0xFF << 24) | (colorRed << 16) | (colorBlue << 8) | colorGreen;
+    }
+  }
+
+  TextureItem(MemReader & reader)
+  {
+    if (reader.readData((uint8_t*)&_params, sizeof(_params)) == false)
+    {
+      TRACE(ERR) << "Can't read texture params";
+      throw std::runtime_error("Can't read texture params");
+    }
+
+    _image.resize(_params._width * _params._height);
+
+    if (reader.shift(_params._offsetOfImage) == false)
+    {
+      TRACE(ERR) << "Can't shift to image";
+      throw std::runtime_error("Can't shift to image");
+    }
+
+    reader.readData(_image.data(), _image.size());
+
+    reader.shift(-(_image.size() + _params._offsetOfImage + sizeof(_params)));
+    if (reader.shift(_params._offsetOfMipmap3 + (_params._width / 8 * _params._height / 8) + 2) == false)
+    {
+      TRACE(ERR) << "Can't shift to RGB map";
+      throw std::runtime_error("Can't shift to RGB map");
+    }
+
+    _rgb[0].resize(256);
+    _rgb[1].resize(256);
+    _rgb[2].resize(256);
+    for (int i = 0; i < 256; ++i)
+    {
+      uint8_t & colorRed   = _rgb[0][i];
+      uint8_t & colorGreen = _rgb[1][i];
+      uint8_t & colorBlue  = _rgb[2][i];
+      reader.readUint8(colorRed);
+      reader.readUint8(colorGreen);
+      reader.readUint8(colorBlue);
     }
   }
 
@@ -68,7 +113,7 @@ public:
   std::vector<uint8_t> _mipmap1;
   std::vector<uint8_t> _mipmap2;
   std::vector<uint8_t> _mipmap3;
-  std::vector<uint32_t> _rgb[3];
+  std::vector<uint8_t> _rgb[3];
 };
 
 int main(int argc, char * argv[])
@@ -90,10 +135,14 @@ int main(int argc, char * argv[])
   std::vector<uint8_t> fullFile{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
   TRACE(DBG) << "File size: " << fullFile.size();
 
-  WADHeader wh;
-  memcpy(&wh, fullFile.data(), sizeof(WADHeader));
+  MemReader reader(fullFile.data(), fullFile.size());
 
-  if (strncmp((char*)(&wh._magicWord), "WAD", 3) != 0)
+  WADHeader wh;
+  reader.readData((uint8_t*)&wh, sizeof(WADHeader));
+  //memcpy(&wh, fullFile.data(), sizeof(WADHeader));
+
+  if (isWadFormat(wh._magicWord) == false)
+  //if (strncmp((char*)(&wh._magicWord), "WAD", 3) != 0)
   {
     TRACE(ERR) << "It's not WAD format: " << std::string((char*)(&wh._magicWord), 4);
     return EXIT_FAILURE;
@@ -101,8 +150,8 @@ int main(int argc, char * argv[])
 
   TRACE(DBG) << "WAD header: number of all textures: " << wh._numOfTextures << ", offset: " << wh._offsetOfLumps;
 
-  file.seekp(wh._offsetOfLumps - sizeof(wh), std::ios_base::cur);
   uint8_t * dataPtr = fullFile.data() + wh._offsetOfLumps;
+  reader.seek(wh._offsetOfLumps);
 
   //Load lumps
   std::vector<LumpItem> lumps;
@@ -110,7 +159,8 @@ int main(int argc, char * argv[])
   for (uint32_t i = 0; i < wh._numOfTextures; ++i)
   {
     LumpItem lump;
-    memcpy(&lump, dataPtr, sizeof(LumpItem));
+    reader.readData((uint8_t*)&lump, sizeof(LumpItem));
+    //memcpy(&lump, dataPtr, sizeof(LumpItem));
     TRACE(DBG) << "Lump: " << std::string(lump._name, 16);
     lumps.push_back(lump);
 
@@ -121,7 +171,9 @@ int main(int argc, char * argv[])
   for (const auto & lump : lumps)
   {
     dataPtr = fullFile.data() + lump._offsetOfTexture;
-    TextureItem item(lump, dataPtr, fullFile.size() - lump._offsetOfTexture);
+    reader.seek(lump._offsetOfTexture);
+    //TextureItem item(lump, dataPtr, fullFile.size() - lump._offsetOfTexture);
+    TextureItem item(reader);
     items.push_back(item);
   }
 
@@ -146,8 +198,7 @@ int main(int argc, char * argv[])
 
     for (const auto it : item._image)
     {
-      for (int i = 0; i < 3; ++i)
-        decFile << (char)(item._rgb[0][it]);
+      decFile << (char)item._rgb[0][it] << (char)item._rgb[1][it] << (char)item._rgb[2][it];
     }
 
     /*
