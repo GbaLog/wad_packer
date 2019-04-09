@@ -44,31 +44,7 @@ struct TextureItemParams
 class TextureItem
 {
 public:
-  TextureItem(const LumpItem & lump, const uint8_t * data, uint32_t size)
-  {
-    memcpy(&_params, data, sizeof(TextureItemParams));
-    _image.resize(_params._width * _params._height);
-
-    const uint8_t * dataImage = data + _params._offsetOfImage;
-    std::copy(dataImage, dataImage + _image.size(), _image.begin());
-
-    const uint8_t * dataRgb = data + _params._offsetOfMipmap3 + (_params._width / 8 * _params._height / 8) + 2;
-    _rgb[0].resize(256);
-    _rgb[1].resize(256);
-    _rgb[2].resize(256);
-    for (int i = 0; i < 256; ++i)
-    {
-      uint8_t colorRed = *dataRgb++;
-      uint8_t colorGreen = *dataRgb++;
-      uint8_t colorBlue = *dataRgb++;
-      _rgb[0][i] = colorRed;
-      _rgb[1][i] = colorGreen;
-      _rgb[2][i] = colorBlue;
-      //it = (0xFF << 24) | (colorRed << 16) | (colorBlue << 8) | colorGreen;
-    }
-  }
-
-  TextureItem(MemReader & reader)
+  TextureItem(MemReader reader)
   {
     if (reader.readData((uint8_t*)&_params, sizeof(_params)) == false)
     {
@@ -78,42 +54,67 @@ public:
 
     _image.resize(_params._width * _params._height);
 
-    if (reader.shift(_params._offsetOfImage) == false)
+    if (reader.shiftFromStart(_params._offsetOfImage) == false)
     {
       TRACE(ERR) << "Can't shift to image";
       throw std::runtime_error("Can't shift to image");
     }
 
-    reader.readData(_image.data(), _image.size());
+    uint32_t & w = _params._width;
+    uint32_t & h = _params._height;
 
-    reader.shift(-(_image.size() + _params._offsetOfImage + sizeof(_params)));
-    if (reader.shift(_params._offsetOfMipmap3 + (_params._width / 8 * _params._height / 8) + 2) == false)
+    reader.readData(_image.data(), _image.size());
+    _mipmap1.resize((w / 2) * (h / 2));
+    reader.readData(_mipmap1.data(), _mipmap1.size());
+    _mipmap2.resize((w / 4) * (h / 4));
+    reader.readData(_mipmap2.data(), _mipmap2.size());
+    _mipmap3.resize((w / 8) * (h / 8));
+    reader.readData(_mipmap3.data(), _mipmap3.size());
+
+    // Mandatory 2 bytes
+    if (reader.shift(2) == false)
     {
       TRACE(ERR) << "Can't shift to RGB map";
       throw std::runtime_error("Can't shift to RGB map");
     }
 
-    _rgb[0].resize(256);
-    _rgb[1].resize(256);
-    _rgb[2].resize(256);
+    if (reader.getRemainingSize() < 256 * 3)
+    {
+      TRACE(ERR) << "Can't load color palette";
+      throw std::runtime_error("Can't load color palette");
+    }
+
+    _redColor.resize(256);
+    _greenColor.resize(256);
+    _blueColor.resize(256);
     for (int i = 0; i < 256; ++i)
     {
-      uint8_t & colorRed   = _rgb[0][i];
-      uint8_t & colorGreen = _rgb[1][i];
-      uint8_t & colorBlue  = _rgb[2][i];
+      uint8_t & colorRed   = _redColor[i];
+      uint8_t & colorGreen = _greenColor[i];
+      uint8_t & colorBlue  = _blueColor[i];
       reader.readUint8(colorRed);
       reader.readUint8(colorGreen);
       reader.readUint8(colorBlue);
     }
   }
 
-//private:
+  std::string getName() const { return _params._name; }
+  uint32_t getWidth() const { return _params._width; }
+  uint32_t getHeight() const { return _params._height; }
+  const std::vector<uint8_t> & getImage() const { return _image; }
+  const std::vector<uint8_t> & getRed() const { return _redColor; }
+  const std::vector<uint8_t> & getGreen() const { return _greenColor; }
+  const std::vector<uint8_t> & getBlue() const { return _blueColor; }
+
+private:
   TextureItemParams _params;
   std::vector<uint8_t> _image;
   std::vector<uint8_t> _mipmap1;
   std::vector<uint8_t> _mipmap2;
   std::vector<uint8_t> _mipmap3;
-  std::vector<uint8_t> _rgb[3];
+  std::vector<uint8_t> _redColor;
+  std::vector<uint8_t> _greenColor;
+  std::vector<uint8_t> _blueColor;
 };
 
 int main(int argc, char * argv[])
@@ -160,8 +161,6 @@ int main(int argc, char * argv[])
   {
     LumpItem lump;
     reader.readData((uint8_t*)&lump, sizeof(LumpItem));
-    //memcpy(&lump, dataPtr, sizeof(LumpItem));
-    TRACE(DBG) << "Lump: " << std::string(lump._name, 16);
     lumps.push_back(lump);
 
     dataPtr += sizeof(LumpItem);
@@ -172,8 +171,7 @@ int main(int argc, char * argv[])
   {
     dataPtr = fullFile.data() + lump._offsetOfTexture;
     reader.seek(lump._offsetOfTexture);
-    //TextureItem item(lump, dataPtr, fullFile.size() - lump._offsetOfTexture);
-    TextureItem item(reader);
+    TextureItem item(MemReader(reader.getPos(), reader.getRemainingSize()));
     items.push_back(item);
   }
 
@@ -182,33 +180,23 @@ int main(int argc, char * argv[])
   system(std::string("mkdir " + dir).c_str());
   for (const auto & item : items)
   {
-    std::string filename = dir + "/" + item._params._name;
+    std::string filename = dir + "/" + item.getName();
     while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
     filename += ".ppm";
     TRACE(DBG) << "Filename: " << filename;
     std::ofstream decFile(filename, std::ios::out | std::ios::binary);
     if (!decFile)
     {
-      TRACE(WRN) << "Cannot create file: " << dir + std::string(item._params._name, 16);
+      TRACE(WRN) << "Cannot create file: " << filename;
       continue;
     }
 
     decFile << "P6\n";
-    decFile << item._params._width << " " << item._params._height << "\n255\n";
+    decFile << item.getWidth() << " " << item.getHeight() << "\n255\n";
 
-    for (const auto it : item._image)
+    for (const auto it : item.getImage())
     {
-      decFile << (char)item._rgb[0][it] << (char)item._rgb[1][it] << (char)item._rgb[2][it];
+      decFile << (char)item.getRed()[it] << (char)item.getGreen()[it] << (char)item.getBlue()[it];
     }
-
-    /*
-    for (uint32_t x = 0; x < item._params._width; ++x)
-    {
-      for (uint32_t y = 0; y < item._params._height; ++y)
-      {
-        decFile << (char)(item._image[x + (y * item._params._width)]);
-      }
-    }
-    */
   }
 }

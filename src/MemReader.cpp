@@ -51,3 +51,27 @@ bool MemReader::shift(int64_t val)
   _pos += val;
   return true;
 }
+
+bool MemReader::shiftFromStart(uint32_t val)
+{
+  if (val >= _size)
+    return false;
+
+  _pos = _data + val;
+  return true;
+}
+
+uint32_t MemReader::getOffset() const
+{
+  return _pos - _data;
+}
+
+uint32_t MemReader::getRemainingSize() const
+{
+  return _size - (_pos - _data);
+}
+
+const uint8_t * MemReader::getPos() const
+{
+  return _pos;
+}

@@ -16,6 +16,11 @@ public:
 
   bool seek(size_t pos);
   bool shift(int64_t val);
+  bool shiftFromStart(uint32_t val);
+
+  uint32_t getOffset() const;
+  uint32_t getRemainingSize() const;
+  const uint8_t * getPos() const;
 
 private:
   const uint8_t * _data;
