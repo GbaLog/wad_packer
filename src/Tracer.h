@@ -3,11 +3,13 @@
 
 #include <ctime>
 #include <string>
+#include <iostream>
 
 enum LogLevel
 {
   DBG,
   WRN,
+  INF,
   ERR
 };
 
