@@ -8,117 +8,93 @@
 #include "Tracer.h"
 #include "MemReader.h"
 #include "PixMapDecoder.h"
+#include "WadDecoder.h"
+#include "BMPEncoder.h"
+#include "MemWriter.h"
 
-bool isWadFormat(uint32_t magic)
+void encodePixMap(const std::string & filename, const std::vector<TextureItem> & items)
 {
-  const uint32_t wadFormat = (0x00 << 24) | ('D' << 16) | ('A' << 8) | 'W';
-  return (magic & 0x00FFFFFF) == wadFormat;
-}
-
-struct WADHeader
-{
-  uint32_t _magicWord;
-  uint32_t _numOfTextures;
-  uint32_t _offsetOfLumps;
-} __attribute__((packed));
-
-struct LumpItem
-{
-  uint32_t _offsetOfTexture;
-  uint32_t _compressedLen;   //Compressed length of texture
-  uint32_t _fullLen;         //Full length of texture
-  uint8_t  _type;
-  uint8_t  _compressionType; // 0 - none of compression
-  uint16_t _dummy;
-  char     _name[16];
-} __attribute__((packed));
-
-struct TextureItemParams
-{
-  char     _name[16];
-  uint32_t _width;
-  uint32_t _height;
-  uint32_t _offsetOfImage;
-  uint32_t _offsetOfMipmap1;
-  uint32_t _offsetOfMipmap2;
-  uint32_t _offsetOfMipmap3;
-} __attribute__((packed));
-
-class TextureItem
-{
-public:
-  TextureItem(MemReader reader)
+  std::string dir = "decoded_"; dir += filename;
+  system(std::string("rmdir /S /Q " + dir).c_str());
+  system(std::string("mkdir " + dir).c_str());
+  for (const auto & item : items)
   {
-    if (reader.readData((uint8_t*)&_params, sizeof(_params)) == false)
+    std::string filename = dir + "/" + item.getName();
+    while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
+    filename += ".ppm";
+    TRACE(DBG) << "Filename: " << filename;
+    std::ofstream decFile(filename, std::ios::out | std::ios::binary);
+    if (!decFile)
     {
-      TRACE(ERR) << "Can't read texture params";
-      throw std::runtime_error("Can't read texture params");
+      TRACE(WRN) << "Cannot create file: " << filename;
+      continue;
     }
 
-    _image.resize(_params._width * _params._height);
+    decFile << "P6\n";
+    decFile << item.getWidth() << " " << item.getHeight() << "\n255\n";
 
-    if (reader.shiftFromStart(_params._offsetOfImage) == false)
+    for (const auto it : item.getImage())
     {
-      TRACE(ERR) << "Can't shift to image";
-      throw std::runtime_error("Can't shift to image");
-    }
-
-    uint32_t * w = &_params._width;
-    uint32_t * h = &_params._height;
-
-    reader.readData(_image.data(), _image.size());
-    _mipmap1.resize((*w / 2) * (*h / 2));
-    reader.readData(_mipmap1.data(), _mipmap1.size());
-    _mipmap2.resize((*w / 4) * (*h / 4));
-    reader.readData(_mipmap2.data(), _mipmap2.size());
-    _mipmap3.resize((*w / 8) * (*h / 8));
-    reader.readData(_mipmap3.data(), _mipmap3.size());
-
-    // Mandatory 2 bytes
-    if (reader.shift(2) == false)
-    {
-      TRACE(ERR) << "Can't shift to RGB map";
-      throw std::runtime_error("Can't shift to RGB map");
-    }
-
-    if (reader.getRemainingSize() < 256 * 3)
-    {
-      TRACE(ERR) << "Can't load color palette";
-      throw std::runtime_error("Can't load color palette");
-    }
-
-    _redColor.resize(256);
-    _greenColor.resize(256);
-    _blueColor.resize(256);
-    for (int i = 0; i < 256; ++i)
-    {
-      uint8_t & colorRed   = _redColor[i];
-      uint8_t & colorGreen = _greenColor[i];
-      uint8_t & colorBlue  = _blueColor[i];
-      reader.readUint8(colorRed);
-      reader.readUint8(colorGreen);
-      reader.readUint8(colorBlue);
+      decFile << (char)item.getRed()[it] << (char)item.getGreen()[it] << (char)item.getBlue()[it];
     }
   }
+}
 
-  std::string getName() const { return _params._name; }
-  uint32_t getWidth() const { return _params._width; }
-  uint32_t getHeight() const { return _params._height; }
-  const std::vector<uint8_t> & getImage() const { return _image; }
-  const std::vector<uint8_t> & getRed() const { return _redColor; }
-  const std::vector<uint8_t> & getGreen() const { return _greenColor; }
-  const std::vector<uint8_t> & getBlue() const { return _blueColor; }
+void encodeBmp(const std::string & filename, const std::vector<TextureItem> & items)
+{
+  std::string dir = "decoded_"; dir += filename;
+  system(std::string("rmdir /S /Q " + dir).c_str());
+  system(std::string("mkdir " + dir).c_str());
 
-private:
-  TextureItemParams _params;
-  std::vector<uint8_t> _image;
-  std::vector<uint8_t> _mipmap1;
-  std::vector<uint8_t> _mipmap2;
-  std::vector<uint8_t> _mipmap3;
-  std::vector<uint8_t> _redColor;
-  std::vector<uint8_t> _greenColor;
-  std::vector<uint8_t> _blueColor;
-};
+  BMPEncoder enc;
+
+  for (const auto & item : items)
+  {
+    std::string filename = dir + "/" + item.getName();
+    while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
+    filename += ".bmp";
+    TRACE(DBG) << "Filename: " << filename;
+
+    BmpData bmpData;
+    bmpData._width = item.getWidth();
+    bmpData._height = item.getHeight();
+    bmpData._data = item.getImage();
+
+    if (item.getRed().size() != 256)
+    {
+      TRACE(WRN) << "Color palette is not 256: " << item.getRed().size();
+      continue;
+    }
+
+    bmpData._palette.reserve(256);
+    for (int i = 0; i < 256; ++i)
+    {
+      Color clr;
+      clr._red = item.getRed().at(i);
+      clr._green = item.getGreen().at(i);
+      clr._blue = item.getBlue().at(i);
+      clr._reserved = 0;
+      bmpData._palette.push_back(clr);
+    }
+
+    VecByte data;
+    if (enc.encode(bmpData, data) == false)
+    {
+      TRACE(ERR) << "Can't encode BMP: " << filename;
+      continue;
+    }
+
+    std::ofstream decFile(filename, std::ios::out | std::ios::binary);
+    if (!decFile)
+    {
+      TRACE(WRN) << "Cannot create file: " << filename;
+      continue;
+    }
+
+    decFile.write((char *)data.data(), data.size());
+    decFile.close();
+  }
+}
 
 int decodeWad(const std::string & filename)
 {
@@ -137,10 +113,8 @@ int decodeWad(const std::string & filename)
 
   WADHeader wh;
   reader.readData((uint8_t*)&wh, sizeof(WADHeader));
-  //memcpy(&wh, fullFile.data(), sizeof(WADHeader));
 
   if (isWadFormat(wh._magicWord) == false)
-  //if (strncmp((char*)(&wh._magicWord), "WAD", 3) != 0)
   {
     TRACE(ERR) << "It's not WAD format: " << std::string((char*)(&wh._magicWord), 4);
     return EXIT_FAILURE;
@@ -172,30 +146,9 @@ int decodeWad(const std::string & filename)
     items.push_back(item);
   }
 
-  std::string dir = "decoded_"; dir += filename;
-  system(std::string("rmdir /S /Q " + dir).c_str());
-  system(std::string("mkdir " + dir).c_str());
-  for (const auto & item : items)
-  {
-    std::string filename = dir + "/" + item.getName();
-    while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
-    filename += ".ppm";
-    TRACE(DBG) << "Filename: " << filename;
-    std::ofstream decFile(filename, std::ios::out | std::ios::binary);
-    if (!decFile)
-    {
-      TRACE(WRN) << "Cannot create file: " << filename;
-      continue;
-    }
-
-    decFile << "P6\n";
-    decFile << item.getWidth() << " " << item.getHeight() << "\n255\n";
-
-    for (const auto it : item.getImage())
-    {
-      decFile << (char)item.getRed()[it] << (char)item.getGreen()[it] << (char)item.getBlue()[it];
-    }
-  }
+  //encodePixMap(filename, items);
+  encodeBmp(filename, items);
+  return EXIT_SUCCESS;
 }
 
 int main(int argc, char * argv[])

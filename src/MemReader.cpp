@@ -3,8 +3,7 @@
 MemReader::MemReader(const uint8_t * data, size_t size) :
   _data(data),
   _size(size),
-  _pos(_data),
-  _posI(0)
+  _pos(_data)
 {}
 
 bool MemReader::readUint8(uint8_t & val)
@@ -33,7 +32,6 @@ bool MemReader::readData(uint8_t * data, size_t size)
     return false;
 
   while (size) { *data++ = *_pos++; --size; }
-  _posI = _pos - _data;
   return true;
 }
 
@@ -43,7 +41,6 @@ bool MemReader::seek(size_t pos)
     return false;
 
   _pos = _data + pos;
-  _posI = _pos - _data;
 }
 
 bool MemReader::shift(int64_t val)

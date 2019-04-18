@@ -24,9 +24,8 @@ public:
 
 private:
   const uint8_t * _data;
-  size_t _size;
+  const size_t _size;
   const uint8_t * _pos;
-  size_t _posI;
 };
 
 #endif // MemReaderH
