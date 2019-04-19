@@ -37,7 +37,21 @@ bool MemWriter::writeData(const void * data, size_t size)
   return true;
 }
 
+bool MemWriter::seek(size_t pos)
+{
+  if (pos >= _size)
+    return false;
+
+  _pos = _data + pos;
+  return true;
+}
+
 uint32_t MemWriter::getRemainingSize() const
 {
   return _size - (_pos - _data);
+}
+
+uint8_t * MemWriter::getPos()
+{
+  return _pos;
 }

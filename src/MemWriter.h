@@ -21,10 +21,11 @@ public:
   uint32_t getOffset() const;
   uint32_t getRemainingSize() const;
   const uint8_t * getPos() const;
+  uint8_t * getPos();
 
 private:
   uint8_t * _data;
-  const size_t _size;
+  size_t _size;
   uint8_t * _pos;
 };
 

@@ -41,6 +41,7 @@ bool MemReader::seek(size_t pos)
     return false;
 
   _pos = _data + pos;
+  return true;
 }
 
 bool MemReader::shift(int64_t val)

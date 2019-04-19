@@ -10,7 +10,10 @@ BMPEncoder::BMPEncoder()
 bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
 {
   uint32_t headersSize = sizeof(BmpFileHeader) + sizeof(BmpInfoHeader);
-  uint32_t fileSize = headersSize + (bmpData._palette.size() * sizeof(Color)) + bmpData._data.size();
+  uint32_t width = ((bmpData._width + 3) & ~3);
+  uint32_t height = bmpData._height;
+  uint32_t imgSize = width * height;
+  uint32_t fileSize = headersSize + (bmpData._palette.size() * sizeof(Color)) + imgSize;
 
   encoded.clear();
   encoded.resize(fileSize);
@@ -31,14 +34,14 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
 
   BmpInfoHeader infoHeader;
   infoHeader._headerSize = sizeof(BmpInfoHeader);
-  infoHeader._width = bmpData._width;
-  infoHeader._height = bmpData._height;
+  infoHeader._width = width;
+  infoHeader._height = height;
   infoHeader._clrPlanes = 1;
   infoHeader._bitsPerPixel = 8;
   infoHeader._compressionType = BmpCompressionType::Bmp_BI_RGB;
-  infoHeader._imageSize = bmpData._width * bmpData._height;
-  infoHeader._horizontalResol = 3780;
-  infoHeader._verticalResol = 3780;
+  infoHeader._imageSize = imgSize;
+  infoHeader._horizontalResol = 0;
+  infoHeader._verticalResol = 0;
   infoHeader._clrUsed = 256;
   infoHeader._importantClrUsed = 0;
 
@@ -48,17 +51,17 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
     return false;
   }
 
-  MemReader rd((uint8_t *)bmpData._palette.data(), bmpData._palette.size() * 3);
+  MemReader rd((uint8_t *)bmpData._palette.data(), bmpData._palette.size() * sizeof(Color));
 
   for (int i = 0; i < (int)infoHeader._clrUsed; ++i)
   {
     Color clr;
-    if (rd.readData((uint8_t *)&clr, 3) == false)
+    if (rd.readData((uint8_t *)&clr, sizeof(Color)) == false)
     {
       TRACE(ERR) << "Can't read color from palette, index: " << i;
       return false;
     }
-    clr._reserved = 0;
+
     if (wr.writeData(&clr, sizeof(Color)) == false)
     {
       TRACE(ERR) << "Can't write color to BMP file, index: " << i;
@@ -66,7 +69,9 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
     }
   }
 
-  for (uint32_t h = 0; h < bmpData._height; ++h)
+  wr = MemWriter(wr.getPos(), wr.getRemainingSize());
+
+  for (int64_t h = height - 1; h >= 0; --h)
   {
     size_t off = h * bmpData._width;
     MemReader imgRd((uint8_t *)bmpData._data.data() + off, bmpData._data.size() - off);
