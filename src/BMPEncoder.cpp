@@ -71,20 +71,13 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
 
   wr = MemWriter(wr.getPos(), wr.getRemainingSize());
 
-  for (int64_t h = height - 1; h >= 0; --h)
+  const uint8_t * bmpImgData = bmpData._data.data();
+  bmpImgData += (height - 1) * width;
+  for (uint32_t i = 0; i < height; ++i)
   {
-    size_t off = h * bmpData._width;
-    MemReader imgRd((uint8_t *)bmpData._data.data() + off, bmpData._data.size() - off);
-    if (imgRd.getRemainingSize() < bmpData._width)
-    {
-      TRACE(ERR) << "Can't read row from BMP data, row: " << h;
-      return false;
-    }
-    if (wr.writeData(imgRd.getPos(), bmpData._width) == false)
-    {
-      TRACE(ERR) << "Can't write row, row: " << h;
-      return false;
-    }
+    wr.seek(width * i);
+    wr.writeData(bmpImgData, width);
+    bmpImgData -= width;
   }
   return true;
 }

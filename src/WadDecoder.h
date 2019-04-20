@@ -46,6 +46,9 @@ public:
   uint32_t getWidth() const { return _params._width; }
   uint32_t getHeight() const { return _params._height; }
   const std::vector<uint8_t> & getImage() const { return _image; }
+  const std::vector<uint8_t> & getMipmap1() const { return _mipmap1; }
+  const std::vector<uint8_t> & getMipmap2() const { return _mipmap2; }
+  const std::vector<uint8_t> & getMipmap3() const { return _mipmap3; }
   const std::vector<uint8_t> & getRed() const { return _redColor; }
   const std::vector<uint8_t> & getGreen() const { return _greenColor; }
   const std::vector<uint8_t> & getBlue() const { return _blueColor; }

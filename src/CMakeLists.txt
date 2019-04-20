@@ -13,6 +13,9 @@ set(SRC_LIST
   PixMapDecoder.h
   BMPEncoder.cpp
   BMPEncoder.h
+  BMPDecoder.cpp
+  BMPDecoder.h
+  BMPCommon.h
   WadDecoder.cpp
   WadDecoder.h
   InetUtils.cpp

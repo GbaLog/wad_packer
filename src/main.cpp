@@ -40,59 +40,128 @@ void encodePixMap(const std::string & filename, const std::vector<TextureItem> &
   }
 }
 
-void encodeBmp(const std::string & filename, const std::vector<TextureItem> & items)
+void encodeTextureToBmp(const std::string & filename, const TextureItem & item)
+{
+  const std::string imgName = filename + ".bmp";
+  const std::string mipmap1Name = filename + "_mip1.bmp";
+  const std::string mipmap2Name = filename + "_mip2.bmp";
+  const std::string mipmap3Name = filename + "_mip3.bmp";
+
+  BMPEncoder enc;
+
+  BmpData bmpData;
+  bmpData._width = item.getWidth();
+  bmpData._height = item.getHeight();
+  bmpData._data = item.getImage();
+
+  if (item.getRed().size() != 256)
+  {
+    TRACE(WRN) << "Color palette is not 256: " << item.getRed().size();
+    return;
+  }
+
+  bmpData._palette.reserve(256);
+  for (int i = 0; i < 256; ++i)
+  {
+    Color clr;
+    clr._red = item.getRed().at(i);
+    clr._green = item.getGreen().at(i);
+    clr._blue = item.getBlue().at(i);
+    clr._reserved = 0;
+    bmpData._palette.push_back(clr);
+  }
+
+  VecByte data;
+  if (enc.encode(bmpData, data) == false)
+  {
+    TRACE(ERR) << "Can't encode BMP: " << imgName;
+    return;
+  }
+
+  std::ofstream decFile(imgName, std::ios::out | std::ios::binary);
+  if (!decFile)
+  {
+    TRACE(WRN) << "Cannot create file: " << imgName;
+    return;
+  }
+
+  decFile.write((char *)data.data(), data.size());
+  decFile.close();
+
+  decFile.open(mipmap1Name);
+  if (!decFile)
+  {
+    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap1Name;
+    return;
+  }
+
+  bmpData._width = item.getWidth() / 2;
+  bmpData._height = item.getHeight() / 2;
+  bmpData._data = item.getMipmap1();
+
+  if (enc.encode(bmpData, data) == false)
+  {
+    TRACE(ERR) << "Can't encode BMP: " << mipmap1Name;
+    return;
+  }
+
+  decFile.write((char *)data.data(), data.size());
+  decFile.close();
+
+  decFile.open(mipmap2Name);
+  if (!decFile)
+  {
+    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap2Name;
+    return;
+  }
+
+  bmpData._width = item.getWidth() / 4;
+  bmpData._height = item.getHeight() / 4;
+  bmpData._data = item.getMipmap2();
+
+  if (enc.encode(bmpData, data) == false)
+  {
+    TRACE(ERR) << "Can't encode BMP: " << mipmap2Name;
+    return;
+  }
+
+  decFile.write((char *)data.data(), data.size());
+  decFile.close();
+
+  decFile.open(mipmap3Name);
+  if (!decFile)
+  {
+    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap3Name;
+    return;
+  }
+
+  bmpData._width = item.getWidth() / 8;
+  bmpData._height = item.getHeight() / 8;
+  bmpData._data = item.getMipmap3();
+
+  if (enc.encode(bmpData, data) == false)
+  {
+    TRACE(ERR) << "Can't encode BMP: " << mipmap3Name;
+    return;
+  }
+
+  decFile.write((char *)data.data(), data.size());
+  decFile.close();
+}
+
+void encodeTexturesToBmp(const std::string & filename, const std::vector<TextureItem> & items)
 {
   std::string dir = "decoded_"; dir += filename;
   system(std::string("rmdir /S /Q " + dir).c_str());
   system(std::string("mkdir " + dir).c_str());
 
-  BMPEncoder enc;
-
   for (const auto & item : items)
   {
     std::string filename = dir + "/" + item.getName();
     while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
-    filename += ".bmp";
     TRACE(DBG) << "Filename: " << filename;
 
-    BmpData bmpData;
-    bmpData._width = item.getWidth();
-    bmpData._height = item.getHeight();
-    bmpData._data = item.getImage();
-
-    if (item.getRed().size() != 256)
-    {
-      TRACE(WRN) << "Color palette is not 256: " << item.getRed().size();
-      continue;
-    }
-
-    bmpData._palette.reserve(256);
-    for (int i = 0; i < 256; ++i)
-    {
-      Color clr;
-      clr._red = item.getRed().at(i);
-      clr._green = item.getGreen().at(i);
-      clr._blue = item.getBlue().at(i);
-      clr._reserved = 0;
-      bmpData._palette.push_back(clr);
-    }
-
-    VecByte data;
-    if (enc.encode(bmpData, data) == false)
-    {
-      TRACE(ERR) << "Can't encode BMP: " << filename;
-      continue;
-    }
-
-    std::ofstream decFile(filename, std::ios::out | std::ios::binary);
-    if (!decFile)
-    {
-      TRACE(WRN) << "Cannot create file: " << filename;
-      continue;
-    }
-
-    decFile.write((char *)data.data(), data.size());
-    decFile.close();
+    encodeTextureToBmp(filename, item);
   }
 }
 
@@ -122,7 +191,6 @@ int decodeWad(const std::string & filename)
 
   TRACE(DBG) << "WAD header: number of all textures: " << wh._numOfTextures << ", offset: " << wh._offsetOfLumps;
 
-  uint8_t * dataPtr = fullFile.data() + wh._offsetOfLumps;
   reader.seek(wh._offsetOfLumps);
 
   //Load lumps
@@ -133,21 +201,18 @@ int decodeWad(const std::string & filename)
     LumpItem lump;
     reader.readData((uint8_t*)&lump, sizeof(LumpItem));
     lumps.push_back(lump);
-
-    dataPtr += sizeof(LumpItem);
   }
 
   std::vector<TextureItem> items;
   for (const auto & lump : lumps)
   {
-    dataPtr = fullFile.data() + lump._offsetOfTexture;
     reader.seek(lump._offsetOfTexture);
-    TextureItem item(MemReader(reader.getPos(), reader.getRemainingSize()));
+    TextureItem item(MemReader(reader.getPos(), lump._fullLen));
     items.push_back(item);
   }
 
   //encodePixMap(filename, items);
-  encodeBmp(filename, items);
+  encodeTexturesToBmp(filename, items);
   return EXIT_SUCCESS;
 }
 
@@ -201,7 +266,7 @@ int main(int argc, char * argv[])
   LumpItem li;
   li._offsetOfTexture = sizeof(WADHeader);
   li._compressedLen = 0;
-  li._fullLen = 0;\
+  li._fullLen = 0;
   li._type = 0x43;
   li._compressionType = 0;
   li._dummy = 0;
