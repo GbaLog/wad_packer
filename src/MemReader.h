@@ -24,7 +24,7 @@ public:
 
 private:
   const uint8_t * _data;
-  const size_t _size;
+  size_t _size;
   const uint8_t * _pos;
 };
 

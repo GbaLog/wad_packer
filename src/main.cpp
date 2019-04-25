@@ -10,6 +10,7 @@
 #include "PixMapDecoder.h"
 #include "WadDecoder.h"
 #include "BMPEncoder.h"
+#include "BMPDecoder.h"
 #include "MemWriter.h"
 
 void encodePixMap(const std::string & filename, const std::vector<TextureItem> & items)
@@ -77,6 +78,8 @@ void encodeTextureToBmp(const std::string & filename, const TextureItem & item)
     TRACE(ERR) << "Can't encode BMP: " << imgName;
     return;
   }
+
+  TRACE(DBG) << "BMP file size: " << data.size();
 
   std::ofstream decFile(imgName, std::ios::out | std::ios::binary);
   if (!decFile)
@@ -237,20 +240,13 @@ int main(int argc, char * argv[])
   }
 
   std::vector<uint8_t> fullFile{std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
-  PixMapPicture pic;
-  PixMapDecoder dec;
-  if (dec.tryToDecode(fullFile, pic) == false)
+  BMPDecoder dec;
+  BmpData bmpData;
+  if (dec.decode(fullFile, bmpData) == false)
   {
     TRACE(ERR) << "Can't decode picture in file: " << filename;
     return EXIT_FAILURE;
   }
-
-  std::set<uint32_t> uniqueColors;
-  for (size_t i = 0; i < pic._red.size(); ++i)
-  {
-    uniqueColors.insert((0x00 << 24) | (pic._red[i] << 16) | (pic._green[i] << 8) | (pic._blue[i]));
-  }
-  TRACE(INF) << "Unique colors: " << uniqueColors.size();
 
   WADHeader wh;
   wh._magicWord = (('3' << 24) | ('D' << 16) | ('A' << 8) | 'W');
@@ -272,8 +268,8 @@ int main(int argc, char * argv[])
   li._dummy = 0;
   strncpy(li._name, name.c_str(), std::max(16ULL, name.size()));
 
-  uint32_t & w = pic._width;
-  uint32_t & h = pic._height;
+  uint32_t w = bmpData._width;
+  uint32_t h = bmpData._height;
 
   TextureItemParams params;
   strncpy(params._name, name.c_str(), std::max(16ULL, name.size()));
@@ -287,12 +283,6 @@ int main(int argc, char * argv[])
   li._fullLen = params._offsetOfMipmap3 + ((w / 8) * (h / 8)) + 2 + (256 * 3) + 2;
   li._compressedLen = li._fullLen;
 
-  std::vector<uint32_t> colors;
-  colors.reserve(256);
-  std::copy(uniqueColors.begin(), uniqueColors.end(), std::back_inserter(colors));
-  for (size_t i = uniqueColors.size(); i < 256; ++i)
-    colors.push_back(0);
-
   std::ofstream ofs(argv[1], std::ios::out | std::ios::binary);
 
   wh._offsetOfLumps = sizeof(WADHeader) + li._fullLen;
@@ -300,34 +290,28 @@ int main(int argc, char * argv[])
   ofs.write((char *)&wh, sizeof(wh));
   ofs.write((char *)&params, sizeof(params));
 
-  for (size_t i = 0; i < pic._red.size(); ++i)
-  {
-    auto it = std::find(colors.begin(), colors.end(), ((0x00 << 24) | (pic._red[i] << 16) | (pic._green[i] << 8) | (pic._blue[i])));
-    if (it != colors.end())
-      ofs << (char)(colors.begin() - it);
-  }
+  ofs.write((char *)bmpData._data.data(), bmpData._data.size());
 
-  for (size_t i = 0; i < ((pic._height / 2) * (pic._width / 2)); ++i)
+  for (size_t i = 0; i < ((h / 2) * (w / 2)); ++i)
   {
     ofs << (char)0x00;
   }
 
-  for (size_t i = 0; i < ((pic._height / 4) * (pic._width / 4)); ++i)
+  for (size_t i = 0; i < ((h / 4) * (w / 4)); ++i)
   {
     ofs << (char)0x00;
   }
 
-  for (size_t i = 0; i < ((pic._height / 8) * (pic._width / 8)); ++i)
+  for (size_t i = 0; i < ((h / 8) * (w / 8)); ++i)
   {
     ofs << (char)0x00;
   }
 
   ofs << (char)0x00 << (char)0x01;
-  for (const auto it : colors)
+
+  for (size_t i = 0; i < bmpData._palette.size(); ++i)
   {
-    ofs << (char)(it >> 16);
-    ofs << (char)(it >> 8);
-    ofs << (char)(it);
+    ofs.write((char *)&bmpData._palette[i], 3);
   }
 
   ofs << (char)0x00 << (char)0x00;

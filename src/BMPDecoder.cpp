@@ -4,9 +4,7 @@
 #include "Tracer.h"
 
 BMPDecoder::BMPDecoder()
-{
-
-}
+{}
 
 bool BMPDecoder::decode(const VecByte & bmpBytes, BmpData & data)
 {
@@ -67,9 +65,26 @@ bool BMPDecoder::decode(const VecByte & bmpBytes, BmpData & data)
   }
 
   data._data.resize(imgSize);
-  if (rd.readData((uint8_t *)data._data.data(), data._data.size()) == false)
+
+  if (rd.getRemainingSize() != data._data.size())
   {
-    TRACE(ERR) << "Can't read BMP file data";
+    TRACE(ERR) << "BMP data is not full: " << rd.getRemainingSize() << ", need: " << data._data.size();
     return false;
   }
+
+  rd = MemReader(rd.getPos(), rd.getRemainingSize());
+
+  uint8_t * bmpImgData = data._data.data();
+  bmpImgData += (data._height - 1) * data._width;
+  for (uint32_t i = 0; i < data._height; ++i)
+  {
+    rd.seek(data._width * i);
+    if (rd.readData(bmpImgData, data._width) == false)
+    {
+      TRACE(ERR) << "Can't read part of bmp image";
+      return false;
+    }
+    bmpImgData -= data._width;
+  }
+  return true;
 }

@@ -1,4 +1,5 @@
 #include "MemReader.h"
+#include <cstring>
 
 MemReader::MemReader(const uint8_t * data, size_t size) :
   _data(data),
@@ -31,7 +32,8 @@ bool MemReader::readData(uint8_t * data, size_t size)
   if ((_pos - _data) + size > _size)
     return false;
 
-  while (size) { *data++ = *_pos++; --size; }
+  memcpy(data, _pos, size);
+  _pos += size;
   return true;
 }
 
