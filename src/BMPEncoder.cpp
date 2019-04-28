@@ -3,12 +3,14 @@
 #include "MemReader.h"
 #include "Tracer.h"
 #include "InetUtils.h"
+#include <cstring>
 
 BMPEncoder::BMPEncoder()
 {}
 
 bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
 {
+  encoded.clear();
   uint32_t headersSize = sizeof(BmpFileHeader) + sizeof(BmpInfoHeader);
   uint32_t width = ((bmpData._width + 3) & ~3);
   uint32_t height = bmpData._height;
@@ -33,6 +35,7 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
   }
 
   BmpInfoHeader infoHeader;
+  memset(&infoHeader, 0, sizeof(infoHeader));
   infoHeader._headerSize = sizeof(BmpInfoHeader);
   infoHeader._width = width;
   infoHeader._height = height;

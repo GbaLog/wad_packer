@@ -23,9 +23,7 @@ set(SRC_LIST
   Tracer.h
 )
 
-if(MINGW)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mno-ms-bitfields")
-endif()
+set(CMAKE_CXX_STANDARD 14)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} Ws2_32)
