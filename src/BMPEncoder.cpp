@@ -4,10 +4,7 @@
 #include "Tracer.h"
 #include "InetUtils.h"
 #include <cstring>
-
-BMPEncoder::BMPEncoder()
-{}
-
+//-----------------------------------------------------------------------------
 bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
 {
   encoded.clear();
@@ -78,9 +75,10 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
   bmpImgData += (height - 1) * bmpData._width;
   for (uint32_t i = 0; i < height; ++i)
   {
-    wr.seek(width * i);
+    wr.shiftFromStart(width * i);
     wr.writeData(bmpImgData, bmpData._width);
     bmpImgData -= bmpData._width;
   }
   return true;
 }
+//-----------------------------------------------------------------------------

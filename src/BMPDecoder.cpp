@@ -2,11 +2,8 @@
 #include "MemReader.h"
 #include "MemWriter.h"
 #include "Tracer.h"
-
-BMPDecoder::BMPDecoder()
-{}
-
-bool BMPDecoder::decode(const VecByte & bmpBytes, BmpData & data)
+//-----------------------------------------------------------------------------
+bool BmpDecoder::decode(const VecByte & bmpBytes, BmpData & data)
 {
   MemReader rd(bmpBytes.data(), bmpBytes.size());
 
@@ -78,7 +75,7 @@ bool BMPDecoder::decode(const VecByte & bmpBytes, BmpData & data)
   bmpImgData += (data._height - 1) * data._width;
   for (uint32_t i = 0; i < data._height; ++i)
   {
-    rd.seek(data._width * i);
+    rd.shiftFromStart(data._width * i);
     if (rd.readData(bmpImgData, data._width) == false)
     {
       TRACE(ERR) << "Can't read part of bmp image";
@@ -88,3 +85,4 @@ bool BMPDecoder::decode(const VecByte & bmpBytes, BmpData & data)
   }
   return true;
 }
+//-----------------------------------------------------------------------------

@@ -1,21 +1,28 @@
-#ifndef WADDECODER_H
-#define WADDECODER_H
-
+#ifndef WadDecoderH
+#define WadDecoderH
+//-----------------------------------------------------------------------------
 #include <cstdint>
-#include <vector>
 #include "Tracer.h"
 #include "MemReader.h"
-
+#include "InetUtils.h"
+#include "Common.h"
+//-----------------------------------------------------------------------------
 bool isWadFormat(uint32_t magic);
-
-struct WADHeader
+uint32_t getMipmap1Size(uint32_t origWidth, uint32_t origHeight);
+uint32_t getMipmap2Size(uint32_t origWidth, uint32_t origHeight);
+uint32_t getMipmap3Size(uint32_t origWidth, uint32_t origHeight);
+//-----------------------------------------------------------------------------
+STRUCT_PACK_BEGIN
+struct WadHeader
 {
   uint32_t _magicWord;
   uint32_t _numOfTextures;
   uint32_t _offsetOfLumps;
-} __attribute__((packed));
-
-struct LumpItem
+};
+STRUCT_PACK_END
+//-----------------------------------------------------------------------------
+STRUCT_PACK_BEGIN
+struct WadLumpHeader
 {
   uint32_t _offsetOfTexture;
   uint32_t _compressedLen;   //Compressed length of texture
@@ -24,9 +31,11 @@ struct LumpItem
   uint8_t  _compressionType; // 0 - none of compression
   uint16_t _dummy;
   char     _name[16];
-} __attribute__((packed));
-
-struct TextureItemParams
+};
+STRUCT_PACK_END
+//-----------------------------------------------------------------------------
+STRUCT_PACK_BEGIN
+struct WadTextureHeader
 {
   char     _name[16];
   uint32_t _width;
@@ -35,39 +44,49 @@ struct TextureItemParams
   uint32_t _offsetOfMipmap1;
   uint32_t _offsetOfMipmap2;
   uint32_t _offsetOfMipmap3;
-} __attribute__((packed));
-
-class TextureItem
-{
-public:
-  TextureItem(MemReader reader);
-
-  std::string getName() const { return _params._name; }
-  uint32_t getWidth() const { return _params._width; }
-  uint32_t getHeight() const { return _params._height; }
-  const std::vector<uint8_t> & getImage() const { return _image; }
-  const std::vector<uint8_t> & getMipmap1() const { return _mipmap1; }
-  const std::vector<uint8_t> & getMipmap2() const { return _mipmap2; }
-  const std::vector<uint8_t> & getMipmap3() const { return _mipmap3; }
-  const std::vector<uint8_t> & getRed() const { return _redColor; }
-  const std::vector<uint8_t> & getGreen() const { return _greenColor; }
-  const std::vector<uint8_t> & getBlue() const { return _blueColor; }
-
-private:
-  TextureItemParams _params;
-  std::vector<uint8_t> _image;
-  std::vector<uint8_t> _mipmap1;
-  std::vector<uint8_t> _mipmap2;
-  std::vector<uint8_t> _mipmap3;
-  std::vector<uint8_t> _redColor;
-  std::vector<uint8_t> _greenColor;
-  std::vector<uint8_t> _blueColor;
 };
-
+STRUCT_PACK_END
+//-----------------------------------------------------------------------------
+STRUCT_PACK_BEGIN
+struct WadTextureColor
+{
+  uint8_t _red;
+  uint8_t _green;
+  uint8_t _blue;
+};
+STRUCT_PACK_END
+typedef std::vector<WadTextureColor> VecWadTextureColor;
+//-----------------------------------------------------------------------------
+struct WadTextureBody
+{
+  VecByte _image;
+  VecByte _mipmap1;
+  VecByte _mipmap2;
+  VecByte _mipmap3;
+  VecWadTextureColor _colors;
+};
+//-----------------------------------------------------------------------------
+struct WadTexture
+{
+  WadTextureHeader _header;
+  WadTextureBody _body;
+  WadLumpHeader _lump;
+};
+typedef std::vector<WadTexture> VecWadTexture;
+//-----------------------------------------------------------------------------
+struct WadFileData
+{
+  WadHeader _header;
+  VecWadTexture _textures;
+};
+//-----------------------------------------------------------------------------
 class WadDecoder
 {
 public:
-  WadDecoder();
-};
+  bool decode(const VecByte & buffer, WadFileData & wadData) const;
 
-#endif // WADDECODER_H
+private:
+  bool decodeTextureBody(MemReader reader, WadTextureHeader & header, WadTextureBody & body) const;
+};
+//-----------------------------------------------------------------------------
+#endif // WadDecoderH

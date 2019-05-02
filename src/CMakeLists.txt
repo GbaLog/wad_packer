@@ -4,26 +4,21 @@ project(wad_packer)
 
 set(SRC_LIST
   main.cpp
-
-  MemReader.cpp
-  MemReader.h
-  MemWriter.cpp
-  MemWriter.h
   PixMapDecoder.cpp
   PixMapDecoder.h
-  BMPEncoder.cpp
-  BMPEncoder.h
-  BMPDecoder.cpp
-  BMPDecoder.h
-  BMPCommon.h
+  BmpEncoder.cpp
+  BmpEncoder.h
+  BmpDecoder.cpp
+  BmpDecoder.h
+  BmpCommon.h
   WadDecoder.cpp
   WadDecoder.h
-  InetUtils.cpp
-  InetUtils.h
-  Tracer.h
 )
 
 set(CMAKE_CXX_STANDARD 14)
 
+add_subdirectory(utils)
+
 add_executable(${PROJECT_NAME} ${SRC_LIST})
-target_link_libraries(${PROJECT_NAME} Ws2_32)
+target_link_libraries(${PROJECT_NAME} ratel-lib)
+target_include_directories(${PROJECT_NAME} PRIVATE utils)

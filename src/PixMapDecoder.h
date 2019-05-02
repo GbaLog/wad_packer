@@ -1,11 +1,10 @@
 #ifndef PixMapDecoderH
 #define PixMapDecoderH
-
-#include <vector>
+//-----------------------------------------------------------------------------
 #include <cstdint>
-#include "Tracer.h"
-
-//Only P6 supported
+#include <string>
+#include "Common.h"
+//-----------------------------------------------------------------------------
 enum PixMapVersion
 {
   Version_Unknown,
@@ -16,26 +15,25 @@ enum PixMapVersion
   Version_P5,
   Version_P6
 };
-
+//-----------------------------------------------------------------------------
 struct PixMapPicture
 {
-  PixMapVersion _ver;
+  PixMapVersion _version;
   uint32_t  _height;
   uint32_t  _width;
-  std::vector<uint8_t> _red;
-  std::vector<uint8_t> _green;
-  std::vector<uint8_t> _blue;
+  VecByte _red;
+  VecByte _green;
+  VecByte _blue;
 };
-
+//-----------------------------------------------------------------------------
 class PixMapDecoder
 {
 public:
-  PixMapDecoder();
-
-  bool tryToDecode(const std::vector<uint8_t> & data, PixMapPicture & pic);
+  bool decode(const VecByte & data, PixMapPicture & pic) const;
 
 private:
   PixMapVersion getVersionFromStr(const std::string & str) const;
 };
-
+//-----------------------------------------------------------------------------
 #endif // PixMapDecoderH
+//-----------------------------------------------------------------------------

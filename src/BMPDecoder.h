@@ -1,13 +1,13 @@
-#ifndef BMPDECODER_H
-#define BMPDECODER_H
-
-#include "BMPCommon.h"
-
-class BMPDecoder
+#ifndef BmpDecoderH
+#define BmpDecoderH
+//-----------------------------------------------------------------------------
+#include "BmpCommon.h"
+//-----------------------------------------------------------------------------
+class BmpDecoder
 {
 public:
-  BMPDecoder();
   bool decode(const VecByte & bmpBytes, BmpData & data);
 };
-
-#endif // BMPDECODER_H
+//-----------------------------------------------------------------------------
+#endif // BmpDecoderH
+//-----------------------------------------------------------------------------

@@ -1,12 +1,14 @@
-#ifndef MemReaderH
-#define MemReaderH
-
+#ifndef RatelMemReaderH
+#define RatelMemReaderH
+//-----------------------------------------------------------------------------
 #include <cstdint>
-
+//-----------------------------------------------------------------------------
 class MemReader
 {
 public:
   MemReader(const uint8_t * data, size_t size);
+  MemReader(const MemReader & rhs) = default;
+  MemReader & operator =(const MemReader & rhs) = default;
 
   bool readUint8(uint8_t & val);
   bool readUint16(uint16_t & val);
@@ -14,7 +16,6 @@ public:
   bool readUint64(uint64_t & val);
   bool readData(uint8_t * data, size_t size);
 
-  bool seek(size_t pos);
   bool shift(int64_t val);
   bool shiftFromStart(uint32_t val);
 
@@ -27,5 +28,6 @@ private:
   size_t _size;
   const uint8_t * _pos;
 };
-
-#endif // MemReaderH
+//-----------------------------------------------------------------------------
+#endif // RatelMemReaderH
+//-----------------------------------------------------------------------------

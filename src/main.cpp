@@ -1,19 +1,15 @@
-#include <iostream>
 #include <fstream>
-#include <vector>
 #include <cstring>
-#include <set>
-#include <algorithm>
-#include <winsock2.h>
 #include "Tracer.h"
 #include "MemReader.h"
 #include "PixMapDecoder.h"
 #include "WadDecoder.h"
-#include "BMPEncoder.h"
-#include "BMPDecoder.h"
+#include "BmpEncoder.h"
+#include "BmpDecoder.h"
 #include "MemWriter.h"
-
-bool readFile(const std::string & filename, std::vector<uint8_t> & data)
+#include "Common.h"
+//-----------------------------------------------------------------------------
+bool readFile(const std::string & filename, VecByte & data)
 {
   std::ifstream file;
   file.open(filename, std::ios::in | std::ios::binary);
@@ -26,55 +22,47 @@ bool readFile(const std::string & filename, std::vector<uint8_t> & data)
   data.insert(data.end(), std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
   return true;
 }
-
-void crackPath(const std::string & filename, std::string & path, std::string & out)
+//-----------------------------------------------------------------------------
+void crackPath(const std::string & filename, std::string & path, std::string & file)
 {
   auto it = filename.find_last_of("\\/");
   if (it != std::string::npos)
   {
     path = filename.substr(0, it);
-    out = filename.substr(it + 1);
+    file = filename.substr(it + 1);
   }
   else
   {
     path.clear();
-    out = filename;
+    file = filename;
   }
 
-  it = out.find_last_of('.');
+  it = file.find_last_of('.');
   if (it != std::string::npos)
-    out = out.substr(0, it);
+    file = file.substr(0, it);
 }
-
-void encodePixMap(const std::string & filename, const std::vector<TextureItem> & items)
+//-----------------------------------------------------------------------------
+void encodeBmpFile(const std::string & filename, const BmpData & data)
 {
-  std::string dir = "decoded_"; dir += filename;
-  system(std::string("rmdir /S /Q " + dir).c_str());
-  system(std::string("mkdir " + dir).c_str());
-  for (const auto & item : items)
+  VecByte buffer;
+  BMPEncoder enc;
+  if (enc.encode(data, buffer) == false)
   {
-    std::string filename = dir + "/" + item.getName();
-    while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
-    filename += ".ppm";
-    TRACE(DBG) << "Filename: " << filename;
-    std::ofstream decFile(filename, std::ios::out | std::ios::binary);
-    if (!decFile)
-    {
-      TRACE(WRN) << "Cannot create file: " << filename;
-      continue;
-    }
-
-    decFile << "P6\n";
-    decFile << item.getWidth() << " " << item.getHeight() << "\n255\n";
-
-    for (const auto it : item.getImage())
-    {
-      decFile << (char)item.getRed()[it] << (char)item.getGreen()[it] << (char)item.getBlue()[it];
-    }
+    TRACE(ERR) << "Can't encode BMP data for file: " << filename;
+    return;
   }
-}
 
-void encodeTextureToBmp(const std::string & filename, const TextureItem & item)
+  std::ofstream decFile(filename, std::ios::out | std::ios::binary);
+  if (!decFile)
+  {
+    TRACE(WRN) << "Cannot create file: " << filename;
+    return;
+  }
+
+  decFile.write((char *)buffer.data(), buffer.size());
+}
+//-----------------------------------------------------------------------------
+void encodeTextureToBmp(const std::string & filename, const WadTexture & item)
 {
   const std::string imgName = filename + ".bmp";
   const std::string mipmap1Name = filename + "_mip1.bmp";
@@ -84,106 +72,50 @@ void encodeTextureToBmp(const std::string & filename, const TextureItem & item)
   BMPEncoder enc;
 
   BmpData bmpData;
-  bmpData._width = item.getWidth();
-  bmpData._height = item.getHeight();
-  bmpData._data = item.getImage();
+  bmpData._width = item._header._width;
+  bmpData._height = item._header._height;
+  bmpData._data = item._body._image;
 
-  if (item.getRed().size() != 256)
+  if (item._body._colors.size() != 256)
   {
-    TRACE(WRN) << "Color palette is not 256: " << item.getRed().size();
+    TRACE(WRN) << "Color palette is not 256: " << item._body._colors.size();
     return;
   }
 
   bmpData._palette.reserve(256);
   for (int i = 0; i < 256; ++i)
   {
+    const auto & itemColors = item._body._colors;
     Color clr;
-    clr._red = item.getRed().at(i);
-    clr._green = item.getGreen().at(i);
-    clr._blue = item.getBlue().at(i);
+    clr._red = itemColors.at(i)._red;
+    clr._green = itemColors.at(i)._green;
+    clr._blue = itemColors.at(i)._blue;
     clr._reserved = 0;
     bmpData._palette.push_back(clr);
   }
 
-  VecByte data;
-  if (enc.encode(bmpData, data) == false)
-  {
-    TRACE(ERR) << "Can't encode BMP: " << imgName;
-    return;
-  }
+  encodeBmpFile(imgName, bmpData);
 
-  std::ofstream decFile(imgName, std::ios::out | std::ios::binary);
-  if (!decFile)
-  {
-    TRACE(WRN) << "Cannot create file: " << imgName;
-    return;
-  }
+  bmpData._width = item._header._width / 2;
+  bmpData._height = item._header._height / 2;
+  bmpData._data = item._body._mipmap1;
 
-  decFile.write((char *)data.data(), data.size());
-  decFile.close();
+  encodeBmpFile(mipmap1Name, bmpData);
 
-  decFile.open(mipmap1Name, std::ios::out | std::ios::binary);
-  if (!decFile)
-  {
-    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap1Name;
-    return;
-  }
+  bmpData._width = item._header._width / 4;
+  bmpData._height = item._header._height / 4;
+  bmpData._data = item._body._mipmap2;
 
-  bmpData._width = item.getWidth() / 2;
-  bmpData._height = item.getHeight() / 2;
-  bmpData._data = item.getMipmap1();
+  encodeBmpFile(mipmap2Name, bmpData);
 
-  if (enc.encode(bmpData, data) == false)
-  {
-    TRACE(ERR) << "Can't encode BMP: " << mipmap1Name;
-    return;
-  }
+  bmpData._width = item._header._width / 8;
+  bmpData._height = item._header._height / 8;
+  bmpData._data = item._body._mipmap3;
 
-  decFile.write((char *)data.data(), data.size());
-  decFile.close();
-
-  decFile.open(mipmap2Name, std::ios::out | std::ios::binary);
-  if (!decFile)
-  {
-    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap2Name;
-    return;
-  }
-
-  bmpData._width = item.getWidth() / 4;
-  bmpData._height = item.getHeight() / 4;
-  bmpData._data = item.getMipmap2();
-
-  if (enc.encode(bmpData, data) == false)
-  {
-    TRACE(ERR) << "Can't encode BMP: " << mipmap2Name;
-    return;
-  }
-
-  decFile.write((char *)data.data(), data.size());
-  decFile.close();
-
-  decFile.open(mipmap3Name, std::ios::out | std::ios::binary);
-  if (!decFile)
-  {
-    TRACE(ERR) << "Cannot create mipmap1 file: " << mipmap3Name;
-    return;
-  }
-
-  bmpData._width = item.getWidth() / 8;
-  bmpData._height = item.getHeight() / 8;
-  bmpData._data = item.getMipmap3();
-
-  if (enc.encode(bmpData, data) == false)
-  {
-    TRACE(ERR) << "Can't encode BMP: " << mipmap3Name;
-    return;
-  }
-
-  decFile.write((char *)data.data(), data.size());
-  decFile.close();
+  encodeBmpFile(mipmap3Name, bmpData);
 }
-
-void encodeTexturesToBmp(const std::string & filename, const std::vector<TextureItem> & items)
+//-----------------------------------------------------------------------------
+void encodeTexturesToBmp(const std::string & filename, const std::vector<WadTexture> & items)
 {
   std::string dir = "decoded_"; dir += filename;
   system(std::string("rmdir /S /Q " + dir).c_str());
@@ -191,87 +123,54 @@ void encodeTexturesToBmp(const std::string & filename, const std::vector<Texture
 
   for (const auto & item : items)
   {
-    std::string filename = dir + "/" + item.getName();
-    while (isspace(filename.back()) || filename.back() == 0x00) filename.pop_back();
+    std::string filename = dir + "/" + item._header._name;
     TRACE(DBG) << "Filename: " << filename;
 
     encodeTextureToBmp(filename, item);
   }
 }
-
-int decodeWad(const std::string & filename)
+//-----------------------------------------------------------------------------
+bool decodeWad(const std::string & filename)
 {
   TRACE(DBG) << "Decode wad: " << filename;
-  std::fstream file;
+  std::ifstream file;
   file.open(filename, std::ios::in | std::ios::binary);
   if (!file)
   {
     TRACE(ERR) << "Can't open file: " << filename;
-    return EXIT_FAILURE;
-  }
-
-  std::vector<uint8_t> fullFile{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-  TRACE(DBG) << "File size: " << fullFile.size();
-
-  MemReader reader(fullFile.data(), fullFile.size());
-
-  WADHeader wh;
-  reader.readData((uint8_t*)&wh, sizeof(WADHeader));
-
-  if (isWadFormat(wh._magicWord) == false)
-  {
-    TRACE(ERR) << "It's not WAD format: " << std::string((char*)(&wh._magicWord), 4);
-    return EXIT_FAILURE;
-  }
-
-  TRACE(DBG) << "WAD header: number of all textures: " << wh._numOfTextures << ", offset: " << wh._offsetOfLumps;
-
-  reader.seek(wh._offsetOfLumps);
-
-  //Load lumps
-  std::vector<LumpItem> lumps;
-  lumps.reserve(wh._numOfTextures);
-  for (uint32_t i = 0; i < wh._numOfTextures; ++i)
-  {
-    LumpItem lump;
-    reader.readData((uint8_t*)&lump, sizeof(LumpItem));
-    lumps.push_back(lump);
-  }
-
-  std::vector<TextureItem> items;
-  for (const auto & lump : lumps)
-  {
-    reader.seek(lump._offsetOfTexture);
-    TextureItem item(MemReader(reader.getPos(), lump._fullLen));
-    items.push_back(item);
-  }
-
-  //encodePixMap(filename, items);
-  encodeTexturesToBmp(filename, items);
-  return EXIT_SUCCESS;
-}
-
-bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpItem & li)
-{
-  ofs.clear();
-  std::string filename = filepath;
-  std::ifstream ifs(filename, std::ios::in | std::ios::binary);
-
-  if (!ifs)
-  {
-    TRACE(ERR) << "Can't open texture file: " << filename;
-    return EXIT_FAILURE;
-  }
-
-  std::vector<uint8_t> fullFile{std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
-  BMPDecoder dec;
-  BmpData bmpData;
-  if (dec.decode(fullFile, bmpData) == false)
-  {
-    TRACE(ERR) << "Can't decode picture in file: " << filename;
     return false;
   }
 
+  VecByte fullFile{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+  WadFileData fileData;
+  WadDecoder dec;
+  if (dec.decode(fullFile, fileData) == false)
+  {
+    TRACE(ERR) << "Can't decode wad file: " << filename;
+    return false;
+  }
+
+  TRACE(DBG) << "WAD header: number of all textures: " << fileData._header._numOfTextures;
+
+  encodeTexturesToBmp(filename, fileData._textures);
+  return true;
+}
+//-----------------------------------------------------------------------------
+void normalizeBmpData(VecByte & data, uint32_t width, uint32_t height)
+{
+  std::vector<uint8_t> copyData;
+  const uint8_t * ptr = data.data();
+  for (uint32_t i = 0; i < height; ++i)
+  {
+    copyData.insert(copyData.end(), ptr, ptr + width);
+    ptr += (width + 3) &  ~3;
+  }
+
+  data = std::move(copyData);
+}
+//-----------------------------------------------------------------------------
+bool loadTexture(const std::string & filename, WadTexture & texture)
+{
   std::string name;
   std::string path;
   crackPath(filename, path, name);
@@ -281,8 +180,9 @@ bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpI
     return false;
   }
 
+  WadLumpHeader & li = texture._lump;
   memset(&li, 0, sizeof(li));
-  li._offsetOfTexture = sizeof(WADHeader);
+  li._offsetOfTexture = sizeof(WadHeader);
   li._compressedLen = 0;
   li._fullLen = 0;
   li._type = 0x43;
@@ -290,93 +190,169 @@ bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpI
   li._dummy = 0;
   strncpy(li._name, name.c_str(), name.size());
 
+  if (readFile(filename, texture._body._image) == false)
+  {
+    TRACE(ERR) << "Can't read original image: " << filename;
+    return false;
+  }
+
+  BmpDecoder dec;
+  BmpData bmpData;
+  if (dec.decode(texture._body._image, bmpData) == false)
+  {
+    TRACE(ERR) << "Can't decode picture in file: " << filename;
+    return false;
+  }
+
   uint32_t w = bmpData._width;
   uint32_t h = bmpData._height;
+  texture._body._image = std::move(bmpData._data);
 
-  TextureItemParams params;
-  memset(&params, 0, sizeof(params));
-  strncpy(params._name, name.c_str(), name.size());
-  params._width = w;
-  params._height = h;
-  params._offsetOfImage = sizeof(TextureItemParams);
-  params._offsetOfMipmap1 = params._offsetOfImage + (w * h);
-  params._offsetOfMipmap2 = params._offsetOfMipmap1 + ((w / 2) * (h / 2));
-  params._offsetOfMipmap3 = params._offsetOfMipmap2 + ((w / 4) * (h / 4));
+  WadTextureHeader & header = texture._header;
+  memset(&header, 0, sizeof(header));
+  strncpy(header._name, name.c_str(), name.size());
+  header._width = w;
+  header._height = h;
+  header._offsetOfImage = sizeof(WadTextureHeader);
+  header._offsetOfMipmap1 = header._offsetOfImage + (w * h);
+  header._offsetOfMipmap2 = header._offsetOfMipmap1 + ((w / 2) * (h / 2));
+  header._offsetOfMipmap3 = header._offsetOfMipmap2 + ((w / 4) * (h / 4));
 
-  li._fullLen = params._offsetOfMipmap3 + ((w / 8) * (h / 8)) + 2 + (256 * 3) + 2;
+  li._fullLen = header._offsetOfMipmap3 + ((w / 8) * (h / 8)) + 2 + (256 * 3) + 2;
   li._compressedLen = li._fullLen;
 
-  ofs.resize(li._fullLen);
-  MemWriter wr(ofs.data(), ofs.size());
+  const std::string mipmap1Name = path + "/" + name + "_mip1.bmp";
+  const std::string mipmap2Name = path + "/" + name + "_mip2.bmp";
+  const std::string mipmap3Name = path + "/" + name + "_mip3.bmp";
 
-  wr.writeData(&params, sizeof(params));
-
-  wr.writeData(bmpData._data.data(), bmpData._data.size());
-
-  std::vector<uint8_t> mipmap1;
-  std::vector<uint8_t> mipmap2;
-  std::vector<uint8_t> mipmap3;
-  BmpData mipmapData;
-
-  if (!readFile(path + "/" + name + "_mip1.bmp", mipmap1) ||
-      dec.decode(mipmap1, mipmapData) == false ||
-      mipmapData._data.size() != ((h / 2) * (w / 2)))
+  if (readFile(mipmap1Name, texture._body._mipmap1) == false ||
+      readFile(mipmap2Name, texture._body._mipmap2) == false ||
+      readFile(mipmap3Name, texture._body._mipmap3) == false)
   {
-    TRACE(ERR) << "Can't read 1st mipmap";
+    TRACE(ERR) << "Can't read one of mipmaps";
     return false;
   }
+  return true;
+}
+//-----------------------------------------------------------------------------
+void encodeTextureToVecByte(const WadTexture & texture, VecByte & fullTextureData)
+{
+  fullTextureData.clear();
+  fullTextureData.resize(texture._lump._fullLen);
 
-  wr.writeData(mipmapData._data.data(), mipmapData._data.size());
+  MemWriter wr(fullTextureData.data(), fullTextureData.size());
+  const auto & body = texture._body;
 
-  if (!readFile(path + "/" + name + "_mip2.bmp", mipmap2) ||
-      dec.decode(mipmap2, mipmapData) == false ||
-      mipmapData._data.size() != ((h / 4) * (w / 4)))
+  wr.writeData(&texture._header, sizeof(WadTextureHeader));
+  wr.writeData(body._image.data(), body._image.size());
+
+  uint32_t w = texture._header._width;
+  uint32_t h = texture._header._height;
+
+  BmpDecoder dec;
+  BmpData mipmap1;
+  BmpData mipmap2;
+  BmpData mipmap3;
+
+  if (dec.decode(body._mipmap1, mipmap1) == false ||
+      dec.decode(body._mipmap2, mipmap2) == false ||
+      dec.decode(body._mipmap3, mipmap3) == false)
   {
-    TRACE(ERR) << "Can't read 2nd mipmap";
-    return false;
+    TRACE(ERR) << "Can't decode one of mipmap";
+    return;
   }
 
-  wr.writeData(mipmapData._data.data(), mipmapData._data.size());
-
-  if (!readFile(path + "/" + name + "_mip3.bmp", mipmap3) ||
-      dec.decode(mipmap3, mipmapData) == false)
+  if (mipmap1._data.size() != getMipmap1Size(w, h))
   {
-    TRACE(ERR) << "Can't read 3rd mipmap, data size: " << mipmapData._data.size()
-               << ", expected size: " << ((h / 8) * (w / 8));
-    return false;
+    normalizeBmpData(mipmap1._data, w / 2, h / 2);
   }
 
-  if (mipmapData._data.size() != ((h / 8) * (w / 8)))
+  if (mipmap2._data.size() != getMipmap2Size(w, h))
   {
-    uint32_t tmpW = (w / 8);
-    uint32_t tmpH = (h / 8);
-    std::vector<uint8_t> copyData;
-    const uint8_t * ptr = mipmapData._data.data();
-    for (uint32_t i = 0; i < tmpH; ++i)
-    {
-      copyData.insert(copyData.end(), ptr, ptr + tmpW);
-      ptr += (tmpW + 3) &  ~3;
-    }
-    mipmapData._data = std::move(copyData);
+    normalizeBmpData(mipmap2._data, w / 4, h / 4);
   }
 
-  wr.writeData(mipmapData._data.data(), mipmapData._data.size());
+  if (mipmap3._data.size() != getMipmap3Size(w, h))
+  {
+    normalizeBmpData(mipmap3._data, w / 8, h / 8);
+  }
+
+  wr.writeData(mipmap1._data.data(), mipmap1._data.size());
+  wr.writeData(mipmap2._data.data(), mipmap2._data.size());
+  wr.writeData(mipmap3._data.data(), mipmap3._data.size());
 
   wr.writeUint8(0x00);
   wr.writeUint8(0x01);
 
-  for (size_t i = 0; i < bmpData._palette.size(); ++i)
+  //Palette must be the same for all images
+  for (size_t i = 0; i < mipmap1._palette.size(); ++i)
   {
-    wr.writeUint8(bmpData._palette[i]._red);
-    wr.writeUint8(bmpData._palette[i]._green);
-    wr.writeUint8(bmpData._palette[i]._blue);
+    wr.writeUint8(mipmap1._palette[i]._red);
+    wr.writeUint8(mipmap1._palette[i]._green);
+    wr.writeUint8(mipmap1._palette[i]._blue);
   }
 
   wr.writeUint8(0x00);
   wr.writeUint8(0x00);
+}
+//-----------------------------------------------------------------------------
+bool encodeToWad(const std::string & wadFilename, const std::string & path, VecString files)
+{
+  if (path.empty() == false)
+  {
+    for (auto & it : files)
+      it = path + "/" + it;
+  }
+
+  WadHeader wh;
+  wh._magicWord = (('3' << 24) | ('D' << 16) | ('A' << 8) | 'W');
+  wh._numOfTextures = files.size();
+
+  VecWadTexture textures;
+  textures.reserve(wh._numOfTextures);
+
+  uint32_t fullLumpLen = 0;
+  for (const auto & file : files)
+  {
+    TRACE(DBG) << "Process file: " << file;
+
+    WadTexture texture;
+    if (loadTexture(file, texture) == false)
+    {
+      TRACE(ERR) << "Can't load texture: " << file;
+      return false;
+    }
+
+    texture._lump._offsetOfTexture += fullLumpLen;
+    fullLumpLen += texture._lump._fullLen;
+    textures.push_back(texture);
+  }
+
+  wh._offsetOfLumps = sizeof(WadHeader) + fullLumpLen;
+
+  std::ofstream ofs(wadFilename, std::ios::out | std::ios::binary);
+  if (!ofs)
+  {
+    TRACE(ERR) << "Can't open file for writing: " << wadFilename;
+    return false;
+  }
+
+  ofs.write((char *)&wh, sizeof(wh));
+
+  for (const auto & texture : textures)
+  {
+    VecByte textureData;
+    encodeTextureToVecByte(texture, textureData);
+    ofs.write((char *)textureData.data(), textureData.size());
+  }
+
+  for (const auto & texture : textures)
+  {
+    ofs.write((char *)&texture._lump, sizeof(texture._lump));
+  }
   return true;
 }
-
+//-----------------------------------------------------------------------------
 int main(int argc, char * argv[])
 {
   if (argc < 2)
@@ -386,54 +362,26 @@ int main(int argc, char * argv[])
   }
 
   if (argc == 2)
-    return decodeWad(argv[1]);
+  {
+    if (decodeWad(argv[1]) == false)
+      return EXIT_FAILURE;
+    return EXIT_SUCCESS;
+  }
 
-  WADHeader wh;
-  wh._magicWord = (('3' << 24) | ('D' << 16) | ('A' << 8) | 'W');
-  wh._numOfTextures = argc - 2;
-
-  std::vector<LumpItem> lumps;
-  std::vector<std::vector<uint8_t> > datas;
-
-  lumps.reserve(wh._numOfTextures);
-  datas.reserve(wh._numOfTextures);
-
-  uint32_t fullLumpLen = 0;
-
+  std::string path;
+  VecString files;
   for (int arg = 2; arg < argc; ++arg)
   {
-    TRACE(DBG) << "Process file: " << argv[arg];
-    LumpItem lump;
-    std::vector<uint8_t> data;
-    if (processItem(argv[arg], data, lump) == false)
+    if (strcmp(argv[arg], "--path") == 0)
     {
-      TRACE(ERR) << "Can't process texture: " << argv[arg];
-      return EXIT_FAILURE;
+      path = argv[++arg];
+      continue;
     }
-    lump._offsetOfTexture += fullLumpLen;
-    fullLumpLen += lump._fullLen;
-    lumps.push_back(lump);
-    datas.push_back(data);
+
+    files.push_back(argv[arg]);
   }
 
-  wh._offsetOfLumps = sizeof(WADHeader) + fullLumpLen;
-
-  std::ofstream ofs(argv[1], std::ios::out | std::ios::binary);
-  if (!ofs)
-  {
-    TRACE(ERR) << "Can't open file for writing: " << argv[1];
+  if (encodeToWad(argv[1], path, std::move(files)) == false)
     return EXIT_FAILURE;
-  }
-
-  ofs.write((char *)&wh, sizeof(wh));
-
-  for (const auto & data : datas)
-  {
-    ofs.write((char *)data.data(), data.size());
-  }
-
-  for (const auto & lump : lumps)
-  {
-    ofs.write((char *)&lump, sizeof(lump));
-  }
+  return EXIT_SUCCESS;
 }

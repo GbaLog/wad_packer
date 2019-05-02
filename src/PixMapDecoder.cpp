@@ -1,11 +1,8 @@
 #include "PixMapDecoder.h"
 #include "MemReader.h"
-#include <stdexcept>
-
-PixMapDecoder::PixMapDecoder()
-{}
-
-bool PixMapDecoder::tryToDecode(const std::vector<uint8_t> & data, PixMapPicture & pic)
+#include "Tracer.h"
+//-----------------------------------------------------------------------------
+bool PixMapDecoder::decode(const VecByte & data, PixMapPicture & pic) const
 {
   std::string s((char*)data.data(), data.size());
 
@@ -14,10 +11,10 @@ bool PixMapDecoder::tryToDecode(const std::vector<uint8_t> & data, PixMapPicture
   if (vOff == std::string::npos)
     return false;
 
-  pic._ver = getVersionFromStr(s.substr(0, vOff));
-  if (pic._ver == PixMapVersion::Version_Unknown)
+  pic._version = getVersionFromStr(s.substr(0, vOff));
+  if (pic._version == PixMapVersion::Version_Unknown)
     return false;
-  if (pic._ver != PixMapVersion::Version_P6)
+  if (pic._version != PixMapVersion::Version_P6)
   {
     TRACE(ERR) << "Version of pixmap is not supported: " << s.substr(0, vOff);
     return false;
@@ -76,7 +73,7 @@ bool PixMapDecoder::tryToDecode(const std::vector<uint8_t> & data, PixMapPicture
   }
   return true;
 }
-
+//-----------------------------------------------------------------------------
 PixMapVersion PixMapDecoder::getVersionFromStr(const std::string & str) const
 {
   if (str == "P1")
@@ -94,3 +91,4 @@ PixMapVersion PixMapDecoder::getVersionFromStr(const std::string & str) const
   else
     return PixMapVersion::Version_Unknown;
 }
+//-----------------------------------------------------------------------------

@@ -1,14 +1,13 @@
-#ifndef BMPEncoderH
-#define BMPEncoderH
-
-#include "BMPCommon.h"
-
+#ifndef BmpEncoderH
+#define BmpEncoderH
+//-----------------------------------------------------------------------------
+#include "BmpCommon.h"
+//-----------------------------------------------------------------------------
 class BMPEncoder
 {
 public:
-  BMPEncoder();
-
   bool encode(const BmpData & bmpData, VecByte & encoded);
 };
-
-#endif // BMPEncoderH
+//-----------------------------------------------------------------------------
+#endif // BmpEncoderH
+//-----------------------------------------------------------------------------
