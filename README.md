@@ -38,5 +38,6 @@ Usage:
 &nbsp;&nbsp;&nbsp;&nbsp;BMP files will be stored in folder with name: `file.wad`  
 &nbsp;&nbsp;For packing:  
 &nbsp;&nbsp;&nbsp;&nbsp;`./wad_packer.exe file.wad [--path path] file1.bmp path/file2.bmp path/file3.bmp`  
-&nbsp;&nbsp;&nbsp;&nbsp;`file.wad` will be stored in the same directory as `wad_packer.exe`.
+&nbsp;&nbsp;&nbsp;&nbsp;`path` prefix needed if `--path` option is not used.  
+&nbsp;&nbsp;&nbsp;&nbsp;`file.wad` will be stored in the same directory as `wad_packer.exe`.  
   
