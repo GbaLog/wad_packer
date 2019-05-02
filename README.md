@@ -25,3 +25,18 @@ Requiremets for encoding BMP files to WAD:
 To do:
   - Support of 40 and 42 types of WAD files
   - Support WAD2
+
+Build:
+  - `cd src`
+  - 'mkdir build && cd build`
+  - 'cmake ../`
+  - `make`
+  
+Use:  
+  For unpacking:  
+    `./wad_packer.exe [file.wad]`  
+  For packing:  
+    `./wad_packer.exe file.wad path/file1.bmp path/file2.bmp path/file3.bmp`  
+    or  
+    `./wad_packer.exe file.wad --path path file1.bmp file2.bmp file3.bmp`  
+  
