@@ -253,6 +253,7 @@ int decodeWad(const std::string & filename)
 
 bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpItem & li)
 {
+  ofs.clear();
   std::string filename = filepath;
   std::ifstream ifs(filename, std::ios::in | std::ios::binary);
 
@@ -347,14 +348,16 @@ bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpI
 
   if (mipmapData._data.size() != ((h / 8) * (w / 8)))
   {
-    auto copyData = mipmapData._data;
+    uint32_t tmpW = (w / 8);
+    uint32_t tmpH = (h / 8);
+    std::vector<uint8_t> copyData;
     const uint8_t * ptr = mipmapData._data.data();
-    for (uint32_t i = 9; i < h; ++i)
+    for (uint32_t i = 0; i < tmpH; ++i)
     {
-      copyData.insert(copyData.end(), ptr, ptr + w);
-      ptr += (w + 3) &  ~3;
+      copyData.insert(copyData.end(), ptr, ptr + tmpW);
+      ptr += (tmpW + 3) &  ~3;
     }
-    mipmapData._data = copyData;
+    mipmapData._data = std::move(copyData);
   }
 
   wr.writeData(mipmapData._data.data(), mipmapData._data.size());
@@ -362,7 +365,6 @@ bool processItem(const std::string & filepath, std::vector<uint8_t> & ofs, LumpI
   wr.writeUint8(0x00);
   wr.writeUint8(0x01);
 
-  TRACE(DBG) << "Pallete size: " << bmpData._palette.size();
   for (size_t i = 0; i < bmpData._palette.size(); ++i)
   {
     wr.writeUint8(bmpData._palette[i]._red);
@@ -396,8 +398,11 @@ int main(int argc, char * argv[])
   lumps.reserve(wh._numOfTextures);
   datas.reserve(wh._numOfTextures);
 
+  uint32_t fullLumpLen = 0;
+
   for (int arg = 2; arg < argc; ++arg)
   {
+    TRACE(DBG) << "Process file: " << argv[arg];
     LumpItem lump;
     std::vector<uint8_t> data;
     if (processItem(argv[arg], data, lump) == false)
@@ -405,13 +410,11 @@ int main(int argc, char * argv[])
       TRACE(ERR) << "Can't process texture: " << argv[arg];
       return EXIT_FAILURE;
     }
+    lump._offsetOfTexture += fullLumpLen;
+    fullLumpLen += lump._fullLen;
     lumps.push_back(lump);
     datas.push_back(data);
   }
-
-  uint32_t fullLumpLen = 0;
-  for (const auto & it : lumps)
-    fullLumpLen += it._fullLen;
 
   wh._offsetOfLumps = sizeof(WADHeader) + fullLumpLen;
 

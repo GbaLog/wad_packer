@@ -75,12 +75,12 @@ bool BMPEncoder::encode(const BmpData & bmpData, VecByte & encoded)
   wr = MemWriter(wr.getPos(), wr.getRemainingSize());
 
   const uint8_t * bmpImgData = bmpData._data.data();
-  bmpImgData += (height - 1) * width;
+  bmpImgData += (height - 1) * bmpData._width;
   for (uint32_t i = 0; i < height; ++i)
   {
     wr.seek(width * i);
-    wr.writeData(bmpImgData, width);
-    bmpImgData -= width;
+    wr.writeData(bmpImgData, bmpData._width);
+    bmpImgData -= bmpData._width;
   }
   return true;
 }
