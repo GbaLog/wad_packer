@@ -32,11 +32,11 @@ Build:
   - 'cmake ../`
   - `make`
   
-Use:  
-  For unpacking:  
-    `./wad_packer.exe [file.wad]`  
-  For packing:  
-    `./wad_packer.exe file.wad path/file1.bmp path/file2.bmp path/file3.bmp`  
-    or  
-    `./wad_packer.exe file.wad --path path file1.bmp file2.bmp file3.bmp`  
+Usage:  
+&nbsp;&nbsp;For unpacking:  
+&nbsp;&nbsp;&nbsp;&nbsp;`./wad_packer.exe file.wad`  
+&nbsp;&nbsp;&nbsp;&nbsp;BMP files will be stored in folder with name: `file.wad`  
+&nbsp;&nbsp;For packing:  
+&nbsp;&nbsp;&nbsp;&nbsp;`./wad_packer.exe file.wad [--path path] file1.bmp path/file2.bmp path/file3.bmp`  
+&nbsp;&nbsp;&nbsp;&nbsp;`file.wad` will be stored in the same directory as `wad_packer.exe`.
   
