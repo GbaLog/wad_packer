@@ -28,8 +28,8 @@ To do:
 
 Build:
   - `cd src`
-  - 'mkdir build && cd build`
-  - 'cmake ../`
+  - `mkdir build && cd build`
+  - `cmake ../`
   - `make`
   
 Usage:  
