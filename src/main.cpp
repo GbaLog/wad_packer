@@ -357,7 +357,9 @@ int main(int argc, char * argv[])
 {
   if (argc < 2)
   {
-    std::cout << "Usage: " << argv[0] << " <filename>\n";
+    std::cout << "Usage: " << argv[0] << " <filename> for unpacking\n"
+              << "       " << argv[0] << " <wad filename> [--path path] file1.bmp path/file2.bmp path/file3.bmp"
+              << " for packing(path required if `--path` is not used\n";
     return EXIT_FAILURE;
   }
 
