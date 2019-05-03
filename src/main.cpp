@@ -203,9 +203,22 @@ bool loadTexture(const std::string & filename, WadTexture & texture)
     TRACE(ERR) << "Can't decode picture in file: " << filename;
     return false;
   }
-
+  
   uint32_t w = bmpData._width;
   uint32_t h = bmpData._height;
+
+  if (w % 16 != 0 || h % 16 != 0)
+  {
+    TRACE(ERR) << "Image width and height should be divisible by 16: width: " << w << ", height: " << h;
+    return false;
+  }
+
+  if (w * h >= 12288)
+  {
+    TRACE(ERR) << "Image size can't be greater than 12288";
+    return false;
+  }
+
   texture._body._image = std::move(bmpData._data);
 
   WadTextureHeader & header = texture._header;
