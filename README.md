@@ -15,6 +15,8 @@ Requiremets for encoding BMP files to WAD:
   - BMP should have 256 or lesser color palette
   - BMP should be 8-bit bits per pixel
   - BMP shouldn't have compression
+  - BMP width and height should be divisible by 16
+  - BMP full size mustn't be greater than 12288 pixels
   - You have to create also BMP files with mipmaps. These are reduced copies of original images.
   Mipmap1 should have half the width and height of the original image. It should be named as original BMP + "_mip1" postfix.
   Mipmap2 should have four times less than the original image. It should be named as original BMP + "_mip2" postfix.
