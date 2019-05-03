@@ -23,7 +23,7 @@ Requiremets for encoding BMP files to WAD:
   - Texture name length should be 16 or lesser letters
   
 To do:
-  - Support of 40 and 42 types of WAD files
+  - Support of 40, 42 and 46 types of WAD files
   - Support WAD2
 
 Build:
